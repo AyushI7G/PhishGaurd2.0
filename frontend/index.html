@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PhishGuard - Phishing Detection</title>
+
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+<style>
+body {
+    font-family: Arial;
+    margin: 20px;
+    background: #f5f7fa;
+}
+
+h1 {
+    text-align: center;
+}
+
+textarea, input {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    margin-bottom: 15px;
+}
+
+button {
+    padding: 12px;
+    width: 100%;
+    background: #007bff;
+    color: white;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #0056b3;
+}
+
+#result {
+    margin-top: 20px;
+}
+
+.alert {
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    color: white;
+    margin-top: 15px;
+}
+
+.phishing {
+    background: #dc3545;
+}
+
+.legit {
+    background: #28a745;
+}
+</style>
+</head>
+
+<body>
+
+<h1>PhishGuard - Email Phishing Detection</h1>
+
+<form id="form">
+    <label>Email Content:</label>
+    <textarea id="emailText" required></textarea>
+    <label>Sender Email:</label>
+    <input id="emailAddress" type="email" placeholder="example@gmail.com">
+    <button type="submit">Analyze Email</button>
+
+    <h2>Website Checker</h2>
+    <input id="urlCheck" placeholder="Enter website URL" style="width:100%; padding:10px; margin-top:10px;">
+    <button onclick="checkURL()">Check Website</button>
+    <div id="urlResult" style="margin-top:15px;"></div>
+</form>
+
+<div id="result"></div>
+
+<script>
+
+function plotShapBar(top_features) {
+    const entries = Object.entries(top_features);
+
+    const features = entries.map(e => e[0]);
+    const values = entries.map(e => e[1]);
+
+    const colors = values.map(v => v > 0 ? 'red' : 'blue');
+
+    const data = [{
+        x: values,
+        y: features,
+        type: 'bar',
+        orientation: 'h',
+        marker: {color: colors}
+    }];
+
+    const layout = {
+    title: 'Top Features (SHAP Explanation)',
+    height: 500,
+    margin: {l: 200}  
+};
+
+    Plotly.newPlot('shapPlot', data, layout);
+}
+
+document.getElementById('form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    document.getElementById('result').innerHTML = "Analyzing...";
+
+    const emailText = document.getElementById('emailText').value;
+    const emailAddress = document.getElementById('emailAddress').value;
+
+    try {
+        const res = await fetch('http://localhost:5000/predict', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                email_text: emailText,
+                email_address: emailAddress
+            })
+        });
+
+        const data = await res.json();
+
+        const isPhishing = data.classification === "Phishing";
+
+        document.getElementById('result').innerHTML = `
+            <div class="alert ${isPhishing ? 'phishing' : 'legit'}">
+                <h2>${isPhishing ? '🚨 PHISHING DETECTED' : '✅ LEGITIMATE EMAIL'}</h2>
+                <p>Confidence: ${(data.probability * 100).toFixed(2)}%</p>
+            </div>
+
+            <h3>Explanation (Why?)</h3>
+            <div id="shapPlot"></div>
+        `;
+
+        plotShapBar(data.top_features);
+
+    } catch (err) {
+        document.getElementById('result').innerHTML = "Error connecting to backend.";
+    }
+});
+
+async function checkURL() {
+    const url = document.getElementById('urlCheck').value;
+
+    const res = await fetch('http://localhost:5000/predict_url', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+    });
+
+    const data = await res.json();
+
+    const isPhishing = data.classification.includes('Phishing');
+
+    document.getElementById('urlResult').innerHTML = `
+        <div class="alert ${isPhishing ? 'phishing' : 'legit'}">
+            <h3>${data.classification}</h3>
+            <p>Confidence: ${(data.probability * 100).toFixed(2)}%</p>
+        </div>
+    `;
+}
+
+</script>
+
+</body>
+</html>
