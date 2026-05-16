@@ -6,3 +6,13 @@ xgboost
 joblib
 shap
 matplotlib
+transformers
+torch
+sentence-transformers
+lightgbm
+celery
+redis
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+faiss-cpu
