@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -68,27 +68,113 @@ button:hover {
 <form id="form">
     <label>Email Content:</label>
     <textarea id="emailText" required></textarea>
+
     <label>Sender Email:</label>
-    <input id="emailAddress" type="email" placeholder="example@gmail.com">
-    <button type="submit">Analyze Email</button>
+
+    <input
+        id="emailAddress"
+        type="email"
+        placeholder="example@gmail.com"
+    >
+
+    <button type="submit">
+        Analyze Email
+    </button>
 
     <h2>Website Checker</h2>
-    <input id="urlCheck" placeholder="Enter website URL" style="width:100%; padding:10px; margin-top:10px;">
-    <button onclick="checkURL()">Check Website</button>
-    <div id="urlResult" style="margin-top:15px;"></div>
+
+    <input
+        id="urlCheck"
+        placeholder="Enter website URL"
+        style="width:100%; padding:10px; margin-top:10px;"
+    >
+
+    <button onclick="checkURL()">
+        Check Website
+    </button>
+
+    <div
+        id="urlResult"
+        style="margin-top:15px;"
+    ></div>
+
 </form>
 
 <div id="result"></div>
 
 <script>
 
-function plotShapBar(top_features) {
+function plotShapBar(
+    top_features,
+    containerId,
+    title = 'Top Features (SHAP Explanation)'
+) {
+
     const entries = Object.entries(top_features);
 
-    const features = entries.map(e => e[0]);
-    const values = entries.map(e => e[1]);
+    if (Array.isArray(top_features)) {
 
-    const colors = values.map(v => v > 0 ? 'red' : 'blue');
+        const el =
+            document.getElementById(containerId);
+
+        if (el) {
+
+            el.innerHTML =
+                top_features.map(feature => `
+                    <div style="
+                        background:#eff6ff;
+                        padding:12px;
+                        border-radius:10px;
+                        margin-bottom:10px;
+                        border-left:5px solid #2563eb;
+                        line-height:1.6;
+                        color:#1e293b;
+                    ">
+                        ${feature}
+                    </div>
+                `).join('');
+        }
+
+        return;
+    }
+
+    if (entries.length === 0) {
+
+        const el =
+            document.getElementById(containerId);
+
+        if (el) {
+
+            el.innerHTML = `
+                <div style="
+                    background:#f8fafc;
+                    padding:12px;
+                    border-radius:10px;
+                    margin-top:10px;
+                    color:#374151;
+                    border-left:5px solid #22c55e;
+                    line-height:1.6;
+                ">
+                    No major suspicious indicators detected.
+                </div>
+            `;
+        }
+
+        return;
+    }
+
+    const features =
+        entries.map(e => e[0]);
+
+    const values =
+        entries.map(e => e[1]);
+
+    const colors =
+        values.map(v =>
+            v > 0
+                ? '#dc3545'
+                : '#007bff'
+        );
 
     const data = [{
         x: values,
@@ -99,72 +185,403 @@ function plotShapBar(top_features) {
     }];
 
     const layout = {
-    title: 'Top Features (SHAP Explanation)',
-    height: 500,
-    margin: {l: 200}  
-};
+        title: {
+            text: title,
+            font: {size: 16}
+        },
 
-    Plotly.newPlot('shapPlot', data, layout);
+        height: 300,
+
+        margin: {
+            l: 180,
+            r: 40,
+            t: 50,
+            b: 40
+        },
+
+        xaxis: {
+            title: 'SHAP Value'
+        },
+
+        yaxis: {
+            automargin: true
+        }
+    };
+
+    Plotly.newPlot(
+        containerId,
+        data,
+        layout
+    );
 }
 
-document.getElementById('form').addEventListener('submit', async function(e) {
-    e.preventDefault();
 
-    document.getElementById('result').innerHTML = "Analyzing...";
+document
+.getElementById('form')
+.addEventListener(
+    'submit',
+    async function(e) {
 
-    const emailText = document.getElementById('emailText').value;
-    const emailAddress = document.getElementById('emailAddress').value;
+        e.preventDefault();
+
+        document
+        .getElementById('result')
+        .innerHTML = "Analyzing...";
+
+        const emailText =
+            document
+            .getElementById('emailText')
+            .value;
+
+        const emailAddress =
+            document
+            .getElementById('emailAddress')
+            .value;
+
+        try {
+
+            const res = await fetch(
+                'http://127.0.0.1:5000/predict',
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+
+                    body: JSON.stringify({
+                        email_text: emailText,
+                        email_address: emailAddress
+                    })
+                }
+            );
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(
+                    data.error || 'Prediction failed'
+                );
+            }
+
+            const isPhishing =
+                data.classification === "Phishing";
+
+            const riskScore =
+                data.risk_score ||
+                data.probability * 100;
+
+            let riskLevel = 'Low';
+
+            let riskColor = '#28a745';
+
+            if (riskScore >= 70) {
+
+                riskLevel = 'High';
+
+                riskColor = '#dc3545';
+
+            } else if (riskScore >= 40) {
+
+                riskLevel = 'Medium';
+
+                riskColor = '#ffc107';
+            }
+
+            document
+            .getElementById('result')
+            .innerHTML = `
+
+                <div class="alert ${isPhishing ? 'phishing' : 'legit'}">
+
+                    <h2>
+                        ${isPhishing
+                            ? '🚨 PHISHING DETECTED'
+                            : '✅ LEGITIMATE EMAIL'}
+                    </h2>
+
+                    <p>
+                        Confidence:
+                        ${(data.probability * 100).toFixed(2)}%
+                    </p>
+
+                </div>
+
+                <div style="
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                ">
+
+                    <h3>📊 Risk Score</h3>
+
+                    <div style="
+                        display: flex;
+                        align-items: center;
+                        gap: 15px;
+                    ">
+
+                        <div style="
+                            flex: 1;
+                            background: #e9ecef;
+                            border-radius: 10px;
+                            height: 20px;
+                        ">
+
+                            <div style="
+                                background: ${riskColor};
+                                width: ${riskScore}%;
+                                border-radius: 10px;
+                                height: 100%;
+                            "></div>
+
+                        </div>
+
+                        <span style="
+                            font-size: 24px;
+                            font-weight: bold;
+                            color: ${riskColor};
+                        ">
+                            ${riskScore}%
+                        </span>
+
+                        <span style="
+                            font-size: 14px;
+                            padding: 4px 12px;
+                            background: ${riskColor};
+                            color: white;
+                            border-radius: 4px;
+                        ">
+                            ${riskLevel}
+                        </span>
+
+                    </div>
+
+                </div>
+
+                <div style="
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #e7f3ff;
+                    border-radius: 8px;
+                    border-left: 4px solid #007bff;
+                ">
+
+                    <h3>🤖 AI Analysis</h3>
+
+                    <pre style="
+                        white-space: pre-wrap;
+                        font-family: Arial, sans-serif;
+                        font-size: 14px;
+                    ">
+${data.reasoning || 'No reasoning available'}
+                    </pre>
+
+                </div>
+
+                <div style="
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #fff3cd;
+                    border-radius: 8px;
+                    border-left: 4px solid #ffc107;
+                ">
+
+                    <h3>
+                        🧠 Model Ensemble Details
+                        (Version: ${data.model_version || 'unknown'})
+                    </h3>
+
+                    <p>
+                        Breakdown of voting probabilities:
+                    </p>
+
+                    <ul>
+
+                        ${
+                            Object.entries(
+                                data.ensemble_breakdown || {}
+                            )
+                            .map(
+                                ([model, prob]) => `
+                                    <li>
+                                        <b>${model}</b>:
+                                        ${(prob * 100).toFixed(2)}%
+                                        phishing
+                                    </li>
+                                `
+                            )
+                            .join('')
+                            ||
+                            '<li>Standard Model Used</li>'
+                        }
+
+                    </ul>
+
+                </div>
+
+                <div style="
+                    margin: 20px 0;
+                    padding: 15px;
+                    background: #fff;
+                    border-radius: 8px;
+                    border: 1px solid #dee2e6;
+                ">
+
+                    <h3>🔍 Top SHAP Features</h3>
+
+                    <div
+                        id="shapEmail"
+                        style="margin-top:10px;"
+                    ></div>
+
+                    <div
+                        id="shapUrl"
+                        style="margin-top:10px;"
+                    ></div>
+
+                    <div
+                        id="shapSender"
+                        style="margin-top:10px;"
+                    ></div>
+
+                </div>
+            `;
+
+            plotShapBar(
+                data.top_email_features,
+                'shapEmail',
+                '📧 Top Email Text Features'
+            );
+
+            plotShapBar(
+                data.top_url_features,
+                'shapUrl',
+                '🌐 Top URL Features'
+            );
+
+            plotShapBar(
+                data.top_email_address_features,
+                'shapSender',
+                '📨 Top Sender Address Features'
+            );
+
+        } catch (err) {
+
+            console.error(err);
+
+            document
+            .getElementById('result')
+            .innerHTML = `
+
+                <div class="alert phishing">
+
+                    <h2>Backend Error</h2>
+
+                    <p>${err.message}</p>
+
+                </div>
+            `;
+        }
+    }
+);
+
+
+async function checkURL() {
+
+    const url =
+        document
+        .getElementById('urlCheck')
+        .value;
 
     try {
-        const res = await fetch('http://localhost:5000/predict', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                email_text: emailText,
-                email_address: emailAddress
-            })
-        });
+
+        const res = await fetch(
+            'http://127.0.0.1:5000/predict_url',
+            {
+                method: 'POST',
+
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+
+                body: JSON.stringify({
+                    url: url
+                })
+            }
+        );
 
         const data = await res.json();
 
-        const isPhishing = data.classification === "Phishing";
+        if (!res.ok) {
+            throw new Error(
+                data.error || 'URL prediction failed'
+            );
+        }
 
-        document.getElementById('result').innerHTML = `
+        const isPhishing =
+            data.classification.includes('Phishing');
+
+        const riskScore =
+            data.risk_score ||
+            data.probability * 100;
+
+        let riskLevel = 'Low';
+
+        let riskColor = '#28a745';
+
+        if (riskScore >= 70) {
+
+            riskLevel = 'High';
+
+            riskColor = '#dc3545';
+
+        } else if (riskScore >= 40) {
+
+            riskLevel = 'Medium';
+
+            riskColor = '#ffc107';
+        }
+
+        document
+        .getElementById('urlResult')
+        .innerHTML = `
+
             <div class="alert ${isPhishing ? 'phishing' : 'legit'}">
-                <h2>${isPhishing ? '🚨 PHISHING DETECTED' : '✅ LEGITIMATE EMAIL'}</h2>
-                <p>Confidence: ${(data.probability * 100).toFixed(2)}%</p>
-            </div>
 
-            <h3>Explanation (Why?)</h3>
-            <div id="shapPlot"></div>
+                <h3>${data.classification}</h3>
+
+                <p>
+                    Confidence:
+                    ${(data.probability * 100).toFixed(2)}%
+                </p>
+
+                <p>
+                    Risk Score:
+                    ${riskScore}% (${riskLevel})
+                </p>
+
+            </div>
         `;
 
-        plotShapBar(data.top_features);
+    } catch(err) {
 
-    } catch (err) {
-        document.getElementById('result').innerHTML = "Error connecting to backend.";
+        console.error(err);
+
+        document
+        .getElementById('urlResult')
+        .innerHTML = `
+
+            <div class="alert phishing">
+
+                <h3>Backend Error</h3>
+
+                <p>${err.message}</p>
+
+            </div>
+        `;
     }
-});
-
-async function checkURL() {
-    const url = document.getElementById('urlCheck').value;
-
-    const res = await fetch('http://localhost:5000/predict_url', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url: url})
-    });
-
-    const data = await res.json();
-
-    const isPhishing = data.classification.includes('Phishing');
-
-    document.getElementById('urlResult').innerHTML = `
-        <div class="alert ${isPhishing ? 'phishing' : 'legit'}">
-            <h3>${data.classification}</h3>
-            <p>Confidence: ${(data.probability * 100).toFixed(2)}%</p>
-        </div>
-    `;
 }
 
 </script>
